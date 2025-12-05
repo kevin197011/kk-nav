@@ -1,0 +1,32 @@
+app:
+  name: kk-nav
+  env: development
+  port: 8080
+  debug: true
+
+database:
+  type: postgres  # postgres | sqlite
+  host: localhost
+  port: 5432
+  name: kk_nav
+  user: postgres
+  password: password
+  ssl_mode: disable
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: 300
+
+jwt:
+  secret: your-secret-key-change-in-production
+  expire_hours: 24
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+
+log:
+  level: info  # debug | info | warn | error
+  format: json  # json | text
+

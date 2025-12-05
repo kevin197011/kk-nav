@@ -1,0 +1,113 @@
+# Copyright (c) 2025 kk
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+services:
+  # 前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kk-nav-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      app:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - kk-nav-network
+
+  # 后端应用服务
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: kk-nav-app
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_NAME=kk-nav
+      - APP_ENV=production
+      - APP_PORT=8080
+      - APP_DEBUG=false
+      - DB_TYPE=postgres
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=kk_nav
+      - DB_USER=kk_nav
+      - DB_PASSWORD=kk_nav_password
+      - DB_SSL_MODE=disable
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production-please-modify-this-secret-key}
+      - JWT_EXPIRE_HOURS=24
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+      # 默认管理员配置（首次启动时创建）
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+    volumes:
+      - ./backend/configs:/root/configs:ro
+      - app_data:/root/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - kk-nav-network
+
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: kk-nav-postgres
+    environment:
+      - POSTGRES_DB=kk_nav
+      - POSTGRES_USER=kk_nav
+      - POSTGRES_PASSWORD=kk_nav_password
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kk_nav"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - kk-nav-network
+
+  # Redis (可选，用于缓存)
+  redis:
+    image: redis:7-alpine
+    container_name: kk-nav-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - kk-nav-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  app_data:
+    driver: local
+
+networks:
+  kk-nav-network:
+    driver: bridge
+

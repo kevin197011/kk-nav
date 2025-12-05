@@ -1,0 +1,97 @@
+# Copyright (c) 2025 kk
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+# 生产环境 Docker Compose 配置
+# 使用预构建的 Docker 镜像，无需本地构建
+#
+# 安全架构说明：
+# - 只暴露前端端口 (3000) 到宿主机
+# - 后端端口 (8080) 仅在内部网络使用
+# - 数据库端口 (5432) 仅在内部网络使用
+# - 所有 API 请求通过前端 Nginx 代理转发
+#
+# 网络流程: 外部 -> :3000 (Nginx) -> :8080 (Backend) -> :5432 (PostgreSQL)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kk-nav-postgres
+    # 注意: 不映射端口到宿主机，仅内部网络访问
+    # 安全性: 数据库不暴露给外部，只能被后端服务访问
+    environment:
+      POSTGRES_DB: kk_nav
+      POSTGRES_USER: kk_nav
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-kk_nav_password}
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - kk-nav-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kk_nav"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/kevin197011/kk-nav/backend:latest
+    container_name: kk-nav-backend
+    # 使用 expose 而不是 ports: 端口仅在内部网络可见，不映射到宿主机
+    # 安全性: API 不直接暴露，只能通过前端 Nginx 代理访问
+    expose:
+      - "8080"
+    environment:
+      - DB_TYPE=postgres
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=kk_nav
+      - DB_USER=kk_nav
+      - DB_PASSWORD=${DB_PASSWORD:-kk_nav_password}
+      - DB_SSL_MODE=disable
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - SERVER_PORT=8080
+      - SERVER_MODE=release
+      - LOG_LEVEL=info
+      - TZ=Asia/Shanghai
+      # 默认管理员配置（首次启动时创建）
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - kk-nav-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/kevin197011/kk-nav/frontend:latest
+    container_name: kk-nav-frontend
+    # 唯一暴露到宿主机的端口: 3000
+    # 提供静态文件服务 + API 反向代理
+    ports:
+      - "3001:80"
+    depends_on:
+      - app
+    networks:
+      - kk-nav-network
+    restart: unless-stopped
+
+networks:
+  kk-nav-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+
