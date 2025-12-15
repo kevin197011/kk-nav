@@ -16,7 +16,7 @@ import (
 // Link 链接模型
 type Link struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
-	Title         string    `gorm:"not null;size:255" json:"title" binding:"required,min=1,max=255"`
+	Title         string    `gorm:"not null;size:255;unique" json:"title" binding:"required,min=1,max=255"`
 	URL           string    `gorm:"not null;type:text" json:"url" binding:"required,url"`
 	Description   string    `gorm:"type:text" json:"description"`
 	CategoryID    uint      `gorm:"not null;index" json:"category_id" binding:"required"`

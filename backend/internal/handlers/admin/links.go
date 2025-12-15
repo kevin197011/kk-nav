@@ -108,6 +108,13 @@ func (h *LinksHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// 检查标题是否已存在
+	var existingLink models.Link
+	if err := h.db.Where("title = ?", req.Title).First(&existingLink).Error; err == nil {
+		utils.Error(c, 400, "Link title already exists")
+		return
+	}
+
 	// 检查分类是否存在
 	var category models.Category
 	if err := h.db.First(&category, req.CategoryID).Error; err != nil {
@@ -193,7 +200,13 @@ func (h *LinksHandler) Update(c *gin.Context) {
 	}
 
 	// 更新字段
-	if req.Title != "" {
+	if req.Title != "" && req.Title != link.Title {
+		// 检查新标题是否已被其他链接使用
+		var existingLink models.Link
+		if err := h.db.Where("title = ? AND id != ?", req.Title, id).First(&existingLink).Error; err == nil {
+			utils.Error(c, 400, "Link title already exists")
+			return
+		}
 		link.Title = req.Title
 	}
 	if req.URL != "" {
